@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoeb App Pro+</title>
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --card: #ffffff; --text: #1e293b; --success: #22c55e; --high: #ef4444; --med: #f59e0b; --low: #10b981; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 15px; }
+        .app-container { max-width: 500px; margin: auto; }
+        
+        /* Header & Progress */
+        .header { text-align: center; margin-bottom: 20px; }
+        .progress-container { background: #e2e8f0; height: 10px; border-radius: 5px; margin: 10px 0; overflow: hidden; }
+        #progressBar { background: var(--success); height: 100%; width: 0%; transition: 0.5s; }
+
+        /* Input Section */
+        .input-card { background: var(--card); padding: 20px; border-radius: 15px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); margin-bottom: 25px; }
+        .input-group { display: flex; flex-direction: column; gap: 12px; }
+        input, select, button { padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 1rem; }
+        .btn-add { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; }
+
+        /* Task Items */
+        ul { list-style: none; padding: 0; }
+        li { background: var(--card); padding: 15px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); position: relative; }
+        li.completed { opacity: 0.6; background: #f1f5f9; }
+        li.completed .task-text { text-decoration: line-through; }
+        
+        .priority-dot { height: 10px; width: 100%; position: absolute; top: 0; left: 0; border-radius: 12px 12px 0 0; }
+        .p-high { background: var(--high); }
+        .p-medium { background: var(--med); }
+        .p-low { background: var(--low); }
+
+        .task-main { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
+        .task-info { font-size: 0.75rem; color: #64748b; margin-top: 8px; }
+        .actions { display: flex; gap: 10px; margin-top: 12px; }
+        .btn-action { background: none; border: none; cursor: pointer; font-size: 0.9rem; padding: 0; color: var(--primary); }
+
+        /* Bottom Controls */
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 30px; }
+        .btn-whatsapp { background: #25d366; color: white; border: none; grid-column: span 2; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="header">
+        <h1>Shoeb App</h1>
+        <div class="progress-container"><div id="progressBar"></div></div>
+        <small id="progressText">0% Completed</small>
+    </div>
+    
+    <div class="input-card">
+        <div class="input-group">
+            <input type="text" id="taskInput" placeholder="Task name...">
+            <div style="display:flex; gap:5px;">
+                <input type="datetime-local" id="taskTime" style="flex:2">
+                <select id="taskPriority" style="flex:1">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                </select>
+            </div>
+            <button class="btn-add" onclick="addTask()">Save Task</button>
+        </div>
+    </div>
+
+    <ul id="taskList"></ul>
+
+    <div class="controls">
+        <button onclick="exportTasks()">Backup JSON</button>
+        <button onclick="document.getElementById('importFile').click()">Import</button>
+        <button class="btn-whatsapp" onclick="shareToWhatsApp()">WhatsApp Share</button>
+    </div>
+    <input type="file" id="importFile" style="display:none" accept=".json" onchange="importTasks(event)">
+</div>
+
+<script>
+    let tasks = JSON.parse(localStorage.getItem('shoeb_v3_tasks')) || [];
+
+    // Request Notification Permission
+    if (Notification.permission !== "granted") Notification.requestPermission();
+
+    function save() {
+        localStorage.setItem('shoeb_v3_tasks', JSON.stringify(tasks));
+        render();
+    }
+
+    function addTask() {
+        const input = document.getElementById('taskInput');
+        const timeInput = document.getElementById('taskTime');
+        const priorityInput = document.getElementById('taskPriority');
+
+        if (!input.value) return;
+
+        const newTask = {
+            id: Date.now(),
+            text: input.value,
+            reminder: timeInput.value,
+            priority: priorityInput.value,
+            completed: false,
+            notified: false
+        };
+
+        tasks.unshift(newTask);
+        input.value = '';
+        timeInput.value = '';
+        save();
+    }
+
+    // Reminder Checker (Runs every 10 seconds)
+    setInterval(() => {
+        const now = new Date().getTime();
+        tasks.forEach(t => {
+            if (t.reminder && !t.completed && !t.notified) {
+                const taskTime = new Date(t.reminder).getTime();
+                if (now >= taskTime) {
+                    new Notification("Shoeb App Reminder", { body: t.text });
+                    t.notified = true;
+                    save();
+                }
+            }
+        });
+    }, 10000);
+
+    function render() {
+        const list = document.getElementById('taskList');
+        list.innerHTML = '';
+        
+        let completedCount = 0;
+        tasks.forEach(t => {
+            if (t.completed) completedCount++;
+            const li = document.createElement('li');
+            if (t.completed) li.classList.add('completed');
+            
+            li.innerHTML = `
+                <div class="priority-dot p-${t.priority}"></div>
+                <div class="task-main">
+                    <span class="task-text" onclick="toggleTask(${t.id})" style="cursor:pointer; flex:1">
+                        ${t.completed ? '✅' : '⭕'} <strong>${t.text}</strong>
+                    </span>
+                </div>
+                <div class="task-info">
+                    ⏰ Reminder: ${t.reminder ? new Date(t.reminder).toLocaleString() : 'No time set'}
+                </div>
+                <div class="actions">
+                    <button class="btn-action" onclick="editTask(${t.id})">Edit</button>
+                    <button class="btn-action" onclick="deleteTask(${t.id})" style="color:red">Delete</button>
+                </div>
+            `;
+            list.appendChild(li);
+        });
+
+        // Update Progress Bar
+        const percent = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
+        document.getElementById('progressBar').style.width = percent + '%';
+        document.getElementById('progressText').innerText = `${percent}% Tasks Completed`;
+    }
+
+    function toggleTask(id) {
+        tasks = tasks.map(t => t.id === id ? {...t, completed: !t.completed} : t);
+        save();
+    }
+
+    function deleteTask(id) {
+        tasks = tasks.filter(t => t.id !== id);
+        save();
+    }
+
+    function editTask(id) {
+        const t = tasks.find(x => x.id === id);
+        const newText = prompt("Edit Task", t.text);
+        if (newText) { t.text = newText; save(); }
+    }
+
+    function exportTasks() {
+        const blob = new Blob([JSON.stringify(tasks)], {type: 'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'shoeb_app_v3.json';
+        a.click();
+    }
+
+    function shareToWhatsApp() {
+        let text = "*My Shoeb App List*\nProgress: " + document.getElementById('progressText').innerText + "\n\n";
+        tasks.forEach(t => text += `${t.completed ? '✅' : '⭕'} ${t.text} (${t.priority})\n`);
+        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
+    }
+
+    render();
+</script>
+</body>
+</html>
